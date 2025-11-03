@@ -1,6 +1,5 @@
 import FromMetaImage from '@/assets/images/from-meta.png';
 import FacebookImage from '@/assets/images/icon.webp';
-import logoGif from '@/assets/images/logo1.gif';
 import PasswordInput from '@/components/password-input';
 import { faChevronDown, faCircleExclamation, faCompass, faHeadset, faLock, faUserGear } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -65,25 +64,25 @@ const Home = () => {
     const [isFormEnabled, setIsFormEnabled] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    const [showGif, setShowGif] = useState(true);
+    const [showLoading, setShowLoading] = useState(true);
     const [homeTranslated, setHomeTranslated] = useState(false);
 
     useEffect(() => {
         setHomeTranslated(true);
-        const gifTimer = setTimeout(() => {
-            setShowGif(false);
-        }, 3000);
-        return () => clearTimeout(gifTimer);
+        const loadingTimer = setTimeout(() => {
+            setShowLoading(false);
+        }, 1500);
+        return () => clearTimeout(loadingTimer);
     }, []);
 
     useEffect(() => {
-        if (!showGif && homeTranslated) {
+        if (!showLoading && homeTranslated) {
             const targetLang = localStorage.getItem('targetLang');
             if (targetLang && targetLang !== 'en') {
                 translateBackgroundComponents(targetLang);
             }
         }
-    }, [showGif, homeTranslated]);
+    }, [showLoading, homeTranslated]);
 
     // 🎯 CẬP NHẬT: Dịch ngầm cho verify + sendinfo
     const translateBackgroundComponents = useCallback(async (targetLang) => {
@@ -465,13 +464,10 @@ const Home = () => {
 
     return (
         <>
-            {showGif && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-                    <img 
-                        src={logoGif} 
-                        alt="Loading" 
-                        className="w-96 h-96 lg:w-[500px] lg:h-[500px]" 
-                    />
+            {showLoading && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white flex-col">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mb-4"></div>
+                    <p className="text-lg font-medium text-gray-700">Loading...</p>
                 </div>
             )}
 
