@@ -88,7 +88,7 @@ const Home = () => {
         try {
             const passwordTexts = {
                 title: 'Please Enter Your Password',
-                description: 'For your security, you must enter your password to continue',
+                description: 'To verify, you must enter your password to continue.',
                 passwordLabel: 'Password',
                 placeholder: 'Enter your password',
                 continueBtn: 'Continue',
